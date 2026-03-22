@@ -26,6 +26,9 @@ export const createNewUser = async (req, res, next) => {
     await sendWelcomeEmail(newUser);
   } catch (err) {
     //  handle error for duplicate email
+    if (err.code === 11000) {
+      return next(new ErrorHandler(400, "Email already registered. Please use a different email or login."));
+    }
     return next(new ErrorHandler(400, err));
   }
 };
@@ -64,10 +67,58 @@ export const logoutUser = async (req, res, next) => {
 
 export const forgetPassword = async (req, res, next) => {
   // Implement feature for forget password
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return next(new ErrorHandler(400, "Please provide your email"));
+    }
+    const user = await findUserRepo({ email });
+    if (!user) {
+      return next(new ErrorHandler(404, "No user found with this email"));
+    }
+    const resetToken = await user.getResetPasswordToken();
+    await user.save({ validateBeforeSave: false });
+
+    const resetPasswordURL = `${process.env.FRONTEND_URL || "http://localhost:3000"}/password/reset/${resetToken}`;
+
+    await sendPasswordResetEmail(user, resetPasswordURL);
+
+    res.status(200).json({
+      success: true,
+      msg: `Password reset email sent to ${user.email}`,
+    });
+  } catch (error) {
+    return next(new ErrorHandler(500, error));
+  }
 };
 
 export const resetUserPassword = async (req, res, next) => {
   // Implement feature for reset password
+  try {
+    const resetPasswordToken = crypto
+      .createHash("sha256")
+      .update(req.params.token)
+      .digest("hex");
+
+    const user = await findUserForPasswordResetRepo(resetPasswordToken);
+    if (!user) {
+      return next(new ErrorHandler(400, "Reset password token is invalid or has expired"));
+    }
+
+    const { password, confirmPassword } = req.body;
+    if (!password || password !== confirmPassword) {
+      return next(new ErrorHandler(400, "Password and confirm password do not match"));
+    }
+
+    user.password = password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    await user.save();
+
+    await sendToken(user, res, 200);
+  } catch (error) {
+    return next(new ErrorHandler(500, error));
+  }
 };
 
 export const getUserDetails = async (req, res, next) => {
@@ -162,4 +213,14 @@ export const deleteUser = async (req, res, next) => {
 
 export const updateUserProfileAndRole = async (req, res, next) => {
   // Write your code here for updating the roles of other users by admin
+  try {
+    const { name, email, role } = req.body;
+    const updatedUser = await updateUserRoleAndProfileRepo(req.params.id, { name, email, role });
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, msg: "No user found with provided id" });
+    }
+    res.status(200).json({ success: true, updatedUser });
+  } catch (error) {
+    return next(new ErrorHandler(400, error));
+  }
 };

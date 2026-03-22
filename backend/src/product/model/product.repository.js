@@ -4,8 +4,8 @@ export const addNewProductRepo = async (product) => {
   return await new ProductModel(product).save();
 };
 
-export const getAllProductsRepo = async () => {
-  return await ProductModel.find({});
+export const getAllProductsRepo = async (queryObj = {}, limit = 8, skip = 0) => {
+  return await ProductModel.find(queryObj).limit(limit).skip(skip);
 };
 
 export const updateProductRepo = async (_id, updatedData) => {

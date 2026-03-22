@@ -1,4 +1,3 @@
-import { timeStamp } from "console";
 import mongoose from "mongoose";
 
 const producSchema = new mongoose.Schema(
@@ -73,8 +72,8 @@ const producSchema = new mongoose.Schema(
     reviews: [
       {
         user: {
-          type: mongoose.Schema.ObjectId,
-          type: String,
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
           required: true,
         },
         name: {
@@ -100,7 +99,7 @@ const producSchema = new mongoose.Schema(
       default: Date.now(),
     },
   },
-  timeStamp
+  { timestamps: true }
 );
 
 const ProductModel = mongoose.model("Product", producSchema);

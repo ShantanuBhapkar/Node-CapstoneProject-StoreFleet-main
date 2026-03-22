@@ -31,6 +31,49 @@ export const addNewProduct = async (req, res, next) => {
 
 export const getAllProducts = async (req, res, next) => {
   // Implement the functionality for search, filter and pagination this function.
+  try {
+    const resultPerPage = Number(req.query.limit) || 8;
+    const currentPage = Number(req.query.page) || 1;
+    const skip = resultPerPage * (currentPage - 1);
+
+    // Build query object
+    const queryObj = {};
+
+    // Search by name
+    if (req.query.keyword) {
+      queryObj.name = { $regex: req.query.keyword, $options: "i" };
+    }
+
+    // Filter by category
+    if (req.query.category) {
+      queryObj.category = req.query.category;
+    }
+
+    // Filter by price range
+    if (req.query.minPrice || req.query.maxPrice) {
+      queryObj.price = {};
+      if (req.query.minPrice) queryObj.price.$gte = Number(req.query.minPrice);
+      if (req.query.maxPrice) queryObj.price.$lte = Number(req.query.maxPrice);
+    }
+
+    // Filter by minimum rating
+    if (req.query.rating) {
+      queryObj.rating = { $gte: Number(req.query.rating) };
+    }
+
+    const totalProducts = await getTotalCountsOfProduct();
+    const products = await getAllProductsRepo(queryObj, resultPerPage, skip);
+
+    res.status(200).json({
+      success: true,
+      totalProducts,
+      resultPerPage,
+      currentPage,
+      products,
+    });
+  } catch (error) {
+    return next(new ErrorHandler(500, error));
+  }
 };
 
 export const updateProduct = async (req, res, next) => {
@@ -153,6 +196,14 @@ export const deleteReview = async (req, res, next) => {
 
     const reviewToBeDeleted = reviews[isReviewExistIndex];
     reviews.splice(isReviewExistIndex, 1);
+
+    // Recalculate product rating after deletion
+    let avgRating = 0;
+    if (reviews.length > 0) {
+      reviews.forEach((rev) => { avgRating += rev.rating; });
+      avgRating = avgRating / reviews.length;
+    }
+    product.rating = avgRating;
 
     await product.save({ validateBeforeSave: false });
     res.status(200).json({
